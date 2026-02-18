@@ -1,0 +1,7 @@
+bandit
+mypy
+# Development dependencies
+pre-commit
+pytest
+pytest-cov
+ruff
