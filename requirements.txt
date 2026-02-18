@@ -2,7 +2,7 @@ bandit
 fire
 hydra-core
 mypy
-pre-commit<4
+pre-commit<5
 pytest
 pytest-cov
 pytest-mock
