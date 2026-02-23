@@ -1,0 +1,9 @@
+# configs/example.yaml
+input: video.mp4
+output: result.mp4
+tile_width: 640
+tile_height: 480
+resize_before_inference: true
+
+tasks:
+  - name: surface_normals
