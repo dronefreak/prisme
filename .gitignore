@@ -38,6 +38,16 @@ outputs/
 *.mkv
 *.webm
 
+# Compressed files
+*.zip
+*.tar.gz
+*.tar
+*.tar.bz2
+*.tar.xz
+*.gz
+*.bz2
+*.xz
+
 # Mypy cache
 .mypy_cache/
 
