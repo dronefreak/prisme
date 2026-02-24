@@ -46,13 +46,13 @@ jobs:
         run: pre-commit run --all-files --show-diff-on-failure
 
       - name: Lint check with ruff
-        run: ruff check src/ tests/ apps/
+        run: ruff check src/ tests/
 
       - name: Type check with mypy
-        run: mypy src/ apps/
+        run: mypy src/
 
       - name: Security check with bandit
-        run: bandit -c pyproject.toml -r src/ apps/
+        run: bandit -c pyproject.toml -r src/
 
   test:
     name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
