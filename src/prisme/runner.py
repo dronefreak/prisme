@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import List
 
 import cv2
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from prisme.io.loader import Loader
 from prisme.base import BaseTask
-from prisme.viz.tiler import tile
+from prisme.viz.tiler import tile, _grid_shape
 
 
 def _init_video_writer(
@@ -54,7 +54,8 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
     Instantiate and load all tasks declared in the config.
 
     Each task entry in cfg.tasks must have a 'name' field matching a
-    registered task class. Tasks are loaded in the order they appear.
+    registered task class. Task-level params (everything except 'name')
+    are forwarded as kwargs to the task constructor.
 
     Args:
         cfg: Hydra config object.
@@ -66,13 +67,17 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
         ValueError: If an unknown task name is provided.
 
     """
-    # Import here to avoid circular imports as more tasks are added
     from prisme.tasks.surface_normals import SurfaceNormalsTask
+    from prisme.tasks.object_detection import ObjectDetectionTask
+    from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
+    from prisme.tasks.depth_estimation import DepthEstimationTask
 
     TASK_REGISTRY = {
         "surface_normals": SurfaceNormalsTask,
+        "object_detection": ObjectDetectionTask,
+        "semantic_segmentation": SemanticSegmentationTask,
+        "depth_estimation": DepthEstimationTask,
     }
-
     tasks: List[BaseTask] = []
     for task_cfg in cfg.tasks:
         name = task_cfg.name
@@ -80,8 +85,14 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
             raise ValueError(
                 f"Unknown task '{name}'. Available tasks: {list(TASK_REGISTRY.keys())}"
             )
-        task = TASK_REGISTRY[name]()
-        print(f"[prisme] Loading model for task: {name}")
+
+        # Forward all task-level params except 'name' to the constructor
+        task_kwargs = {
+            k: v for k, v in OmegaConf.to_container(task_cfg).items() if k != "name"
+        }
+
+        task = TASK_REGISTRY[name](**task_kwargs)
+        print(f"[prisme] Loading model for task: {name} | params: {task_kwargs}")
         task.load_model()
         tasks.append(task)
 
@@ -113,8 +124,6 @@ def run(cfg: DictConfig) -> None:
     n_tiles = len(tasks) + 1  # +1 for original frame
 
     # Compute final output dimensions from grid
-    from prisme.viz.tiler import _grid_shape
-
     rows, cols = _grid_shape(n_tiles)
     out_width = cols * tile_width
     out_height = rows * tile_height
@@ -131,10 +140,6 @@ def run(cfg: DictConfig) -> None:
     )
 
     for frame_idx, frame in loader.frames():
-        if cfg.get("resize_before_inference", False):
-            frame = cv2.resize(
-                frame, (tile_width, tile_height), interpolation=cv2.INTER_LINEAR
-            )
         task_outputs = [task.infer(frame) for task in tasks]
         tiles = [frame] + task_outputs
         tiled_frame = tile(tiles, tile_width=tile_width, tile_height=tile_height)

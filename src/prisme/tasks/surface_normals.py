@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 from prisme.base import BaseTask
-from utils.generic_utils import RichConsoleManager
+from helpers.console_factory import RichConsoleManager
 
 DSINE_WEIGHTS_URL = "https://huggingface.co/camenduru/DSINE/resolve/main/dsine.pt"
 
@@ -20,11 +20,12 @@ DSINE_WEIGHTS_URL = "https://huggingface.co/camenduru/DSINE/resolve/main/dsine.p
 class SurfaceNormalsTask(BaseTask):
     """Task for predicting surface normals from images using DSINE."""
 
-    def __init__(self) -> None:
+    def __init__(self, resize_before_inference: int | None = None) -> None:
         """Initialize the SurfaceNormalsTask."""
         super().__init__(name="surface_normals")
         self.weights_path = self.weights_dir / "dsine.pt"
         self.console = RichConsoleManager.get_console()
+        self.resize_before_inference = resize_before_inference
 
     def _download_weights_if_missing(self) -> None:
         """Download DSINE weights if not already present."""
@@ -58,9 +59,13 @@ class SurfaceNormalsTask(BaseTask):
 
         """
         self._ensure_model_loaded()
+        if self.resize_before_inference is not None:
+            h, w = frame.shape[:2]
+            scale = self.resize_before_inference / max(h, w)
+            frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
         with torch.inference_mode():
-            normal = self.model.infer_cv2(frame)[0]  # (3, H, W)
-            normal = (normal + 1) / 2  # Remap [-1, 1] -> [0, 1]
+            normal = self.model.infer_cv2(frame)[0]
+            normal = (normal + 1) / 2
             normal = (normal * 255).cpu().numpy().astype(np.uint8).transpose(1, 2, 0)
             normal = cv2.cvtColor(normal, cv2.COLOR_RGB2BGR)
         return normal

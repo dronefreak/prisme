@@ -6,4 +6,15 @@ tile_height: 480
 resize_before_inference: true
 
 tasks:
-  - name: surface_normals
+  # - name: surface_normals
+  #   resize_before_inference: 1280
+  - name: object_detection
+    threshold: 0.4
+    resize_before_inference: 1280
+    rfdetr_model: base # options: nano, medium, base, large
+  - name: semantic_segmentation
+    resize_before_inference: 1280
+    segformer_model: b2 # options: b0, b1, b2, b3, b4, b5
+  - name: depth_estimation
+    resize_before_inference: 1280
+    model_size: base # options: small, base, large
