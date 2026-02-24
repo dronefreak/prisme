@@ -92,7 +92,7 @@ jobs:
           set -euo pipefail
           python -m pytest tests/ \
             -v \
-            --cov=template_project \
+            --cov=prisme \
             --cov-fail-under=90 \
             --cov-report=term-missing \
             --cov-report=xml

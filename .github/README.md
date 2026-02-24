@@ -1,4 +1,6 @@
-# Base Python Template
+# PRISME
+
+<!-- # Base Python Template
 
 ![Python](https://img.shields.io/badge/python-3.11.9-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -235,4 +237,4 @@ These files establish norms, processes, and expectations for contributors and ma
 | `SECURITY.md` | Instructions for reporting vulnerabilities | Typically reusable |
 | `CHANGELOG.md` | Notable changes per release ([Keep a Changelog](https://keepachangelog.com/)) | **Must be maintained** |
 | `SUPPORT.md` | Help channels (issues, forums, etc.) | **Must be customized** |
-| `GOVERNANCE.md` | Decision-making processes and roles | For large/enterprise projects; may be removed for personal use |
+| `GOVERNANCE.md` | Decision-making processes and roles | For large/enterprise projects; may be removed for personal use | -->

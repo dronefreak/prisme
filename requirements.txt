@@ -1,10 +1,14 @@
 bandit
 fire
+geffnet==1.0.2
 hydra-core
 mypy
+opecv-python==4.13.0
 pre-commit<4
 pytest
 pytest-cov
 pytest-mock
 ruff
+torch==2.8.0
+torchvision==0.23.0
 types-PyYAML
