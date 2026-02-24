@@ -13,6 +13,41 @@ build/
 # Pytest cache
 .pytest_cache
 
+# Pytorch model checkpoints
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.onnx
+*.h5
+*.pb
+*.safetensors
+
+# Hydra config and log directories
+./.hydra/
+output/
+outputs/
+
+# Images and videos
+*.jpg
+*.jpeg
+*.bmp
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# Compressed files
+*.zip
+*.tar.gz
+*.tar
+*.tar.bz2
+*.tar.xz
+*.gz
+*.bz2
+*.xz
+
 # Mypy cache
 .mypy_cache/
 

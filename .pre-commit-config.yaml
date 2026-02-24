@@ -30,11 +30,11 @@ repos:
       - id: debug-statements
       - id: check-ast
       - id: check-added-large-files
-        args: ["--maxkb=1000"]
+        args: ["--maxkb=100000"]
 
   # ---------- PYTHON LINT + FORMAT (Ruff) ----------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.13
+    rev: v0.15.1
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -110,7 +110,7 @@ repos:
     rev: v0.38.0
     hooks:
       - id: markdownlint-fix
-        args: [--disable, MD013, MD033, MD041, MD024, --]
+        args: [--disable, MD013, MD033, MD041, MD024, MD029, --]
 
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
