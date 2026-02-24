@@ -3,8 +3,7 @@ fire
 geffnet==1.0.2
 hydra-core
 mypy
-opecv-python==4.13.0
-pre-commit<4
+pre-commit<5
 pytest
 pytest-cov
 pytest-mock
