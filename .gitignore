@@ -31,7 +31,6 @@ outputs/
 # Images and videos
 *.jpg
 *.jpeg
-*.png
 *.bmp
 *.mp4
 *.avi

@@ -1,31 +1,52 @@
-# prisme 🔷
+# 🌈 prisme
 
-> One input. Multiple perspectives.
+> **One input. Multiple perspectives.**  
+> Unified computer vision inference for research & visualisation.
 
-**prisme** is a unified computer vision inference library for research and visualisation. Give it an image or video, configure your tasks in a single YAML file, and get a tiled output with all task results side by side — no stitching pipelines together manually.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
+[![Python ≥3.10](https://img.shields.io/badge/python-≥3.10-blue?style=flat)](https://www.python.org/)
+[![PyTorch ≥2.0](https://img.shields.io/badge/pytorch-≥2.0-ee4c2c?style=flat&logo=pytorch)](https://pytorch.org/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000?style=flat)](https://github.com/psf/black)
+[![Type checked: mypy](https://img.shields.io/badge/types-mypy-blue?style=flat)](http://mypy-lang.org/)
+[![GitHub issues](https://img.shields.io/github/issues/yourusername/prisme?style=flat)](https://github.com/yourusername/prisme/issues)
 
-Built for AD scene understanding but useful for any outdoor scene analysis.
+![Demo](../assets/prisme.png)
+
+**prisme** lets you feed an image or video, configure multiple CV tasks in a single YAML file, and get a tiled output with all results side-by-side — no manual pipeline stitching.
+
+Built for autonomous driving scene understanding, but equally powerful for any outdoor/urban scene analysis.
+
+---
+
+## Table of Contents
+
+- [Demo](#demo)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Supported Tasks](#supported-tasks)
+- [Output Grid Layout](#output-grid-layout)
+- [Adding a New Task](#adding-a-new-task)
+- [Requirements](#requirements)
+- [License](#license)
 
 ---
 
 ## Demo
 
-<!-- VIDEO PLACEHOLDER — replace with actual demo gif/video link -->
+<!-- Replace with actual hosted video/GIF -->
 ![Demo](assets/demo.gif)
+
+> 💡 *Tip: For best results, use 1280px width inputs. All models auto-resize if configured.*
 
 ---
 
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/prisme.git
+git clone https://github.com/yourusername/prisme.git  
 cd prisme
 pip install -e .
 ```
-
-Weights are downloaded automatically on first run to `~/.prisme/weights/`.
-
----
 
 ## Usage
 
@@ -151,7 +172,7 @@ That's it.
 
 ## License
 
-MIT
+Apache V2.0
 
 ---
 
