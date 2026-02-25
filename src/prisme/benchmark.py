@@ -619,7 +619,7 @@ def _save_csv(results: list[BenchResult], path: str) -> None:
 # ── Entry point ────────────────────────────────────────────────────────────
 
 
-@hydra.main(config_path="../../conf", config_name="config", version_base=None)
+@hydra.main(config_path="configs", config_name="example", version_base=None)
 def main(cfg: DictConfig) -> None:
     bcfg = cfg.benchmark
 
