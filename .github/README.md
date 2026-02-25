@@ -43,14 +43,14 @@ Built for autonomous driving scene understanding, but equally powerful for any o
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/prisme.git  
+git clone https://github.com/dronefreak/prisme.git  
 cd prisme
 pip install -e .
 ```
 
 ## Usage
 
-Edit `src/prisme/configs/example.yaml`:
+Edit `configs/example.yaml`:
 
 ```yaml
 input: /path/to/your/video.mp4
@@ -73,6 +73,16 @@ tasks:
   - name: depth_estimation
     model_size: large
     resize_before_inference: 1280
+
+  - name: panoptic_segmentation
+
+  - name: hybridnets
+    road_alpha: 0.4
+    lane_alpha: 0.6
+
+  - name: pose_estimation
+    det_conf: 0.3
+    kp_conf: 0.3
 ```
 
 Then run:
@@ -91,8 +101,11 @@ Any config value can be overridden inline via Hydra.
 |------|-------|--------|
 | Surface Normals | [DSINE](https://github.com/hugoycj/DSINE-hub) | `torch.hub` |
 | Object Detection | [RF-DETR Base](https://github.com/roboflow/rf-detr) | `pip install rfdetr` |
-| Semantic Segmentation | [SegFormer-B0 to B5](https://huggingface.co/nvidia/segformer-b2-finetuned-cityscapes-1024-1024) — Cityscapes | HuggingFace |
-| Depth Estimation | [Depth Anything V2](https://huggingface.co/depth-anything/Depth-Anything-V2-Large-hf) | HuggingFace |
+| Semantic Segmentation | [SegFormer-B2](https://huggingface.co/nvidia/segformer-b2-finetuned-cityscapes-1024-1024) — Cityscapes | HuggingFace |
+| Depth Estimation | [Depth Anything V2 Large](https://huggingface.co/depth-anything/Depth-Anything-V2-Large-hf) | HuggingFace |
+| Panoptic Segmentation | [Mask2Former](https://huggingface.co/facebook/mask2former-swin-large-cityscapes-panoptic) — Cityscapes | HuggingFace |
+| Drivable Area + Lanes | [HybridNets](https://github.com/datvuthanh/HybridNets) — BDD100K | `torch.hub` |
+| Pose Estimation | [ViTPose-B](https://huggingface.co/usyd-community/vitpose-base-simple) + YOLOv8n detector | HuggingFace + `ultralytics` |
 
 All models are inference-only. No training code.
 

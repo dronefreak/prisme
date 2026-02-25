@@ -75,7 +75,8 @@ ALL_TASKS = [
     "semantic_segmentation",
     "depth_estimation",
     "panoptic_segmentation",
-    "lane_detection",
+    "hybridnets",
+    "pose_estimation",
 ]
 
 _TASK_COLOURS = {
@@ -84,7 +85,8 @@ _TASK_COLOURS = {
     "semantic_segmentation": "bright_green",
     "depth_estimation": "bright_magenta",
     "panoptic_segmentation": "bright_cyan",
-    "lane_detection": "bright_blue",
+    "hybridnets": "bright_blue",
+    "pose_estimation": "bright_red",
     "FULL STACK": "bold white",
 }
 
@@ -96,7 +98,8 @@ def _load_task(name: str):
     from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
     from prisme.tasks.depth_estimation import DepthEstimationTask
     from prisme.tasks.panoptic_segmentation import PanopticSegmentationTask
-    from prisme.tasks.lane_detection import LaneDetectionTask
+    from prisme.tasks.hybridnets import HybridNetsTask
+    from prisme.tasks.pose_estimation import PoseEstimationTask
 
     registry = {
         "surface_normals": SurfaceNormalsTask,
@@ -104,7 +107,8 @@ def _load_task(name: str):
         "semantic_segmentation": SemanticSegmentationTask,
         "depth_estimation": DepthEstimationTask,
         "panoptic_segmentation": PanopticSegmentationTask,
-        "lane_detection": LaneDetectionTask,
+        "hybridnets": HybridNetsTask,
+        "pose_estimation": PoseEstimationTask,
     }
     return registry[name]()
 
@@ -615,7 +619,7 @@ def _save_csv(results: list[BenchResult], path: str) -> None:
 # ── Entry point ────────────────────────────────────────────────────────────
 
 
-@hydra.main(config_path="configs", config_name="example", version_base=None)
+@hydra.main(config_path="../../conf", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     bcfg = cfg.benchmark
 

@@ -6,13 +6,36 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 dependencies = [
+    # Core
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "numpy>=1.24.0",
     "opencv-python>=4.8.0",
+
+    # Config
     "hydra-core>=1.3.0",
     "omegaconf>=2.3.0",
+
+    # HuggingFace (SegFormer, Mask2Former, DepthAnything, ViTPose-B)
+    "transformers>=4.40.0",   # ViTPose added in 4.40
     "huggingface-hub>=0.20.0",
+    "timm==0.5.4",            # backbone dep for several HF vision models
+
+    # Pose estimation detector
+    "ultralytics>=8.0.0",     # YOLOv8n person detector in PoseEstimationTask
+
+    # Console / UI
+    "rich>=13.0.0",
+
+    # Benchmark (CPU RAM tracking) — soft dependency, gracefully absent
+    "psutil>=5.9.0",
+
+    # HybridsNet
+    "prefetch_generator>=1.0.0",
+    "webcolors>=25.0.0",
+    "pretrainedmodels>=0.7.0",
+    "efficientnet_pytorch>=0.7.1",
+
 ]
 
 [project.scripts]
