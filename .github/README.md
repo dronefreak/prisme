@@ -34,7 +34,7 @@ Built for autonomous driving scene understanding, but equally powerful for any o
 ## Demo
 
 <!-- Replace with actual hosted video/GIF -->
-![Demo](assets/demo.gif)
+![Demo](../assets/prisme.gif)
 
 > 💡 *Tip: For best results, use 1280px width inputs. All models auto-resize if configured.*
 

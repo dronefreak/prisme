@@ -25,7 +25,7 @@ class DepthEstimationTask(BaseTask):
     def __init__(
         self,
         model_size: str = "large",
-        colormap: int = cv2.COLORMAP_INFERNO,
+        colormap: int = cv2.COLORMAP_TURBO,
         resize_before_inference: int | None = None,
     ) -> None:
         """
