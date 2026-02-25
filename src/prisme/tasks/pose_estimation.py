@@ -160,8 +160,10 @@ class PoseEstimationTask(BaseTask):
     # ── BaseTask interface ──────────────────────────────────────────────────
 
     def _download_weights_if_missing(self) -> None:
-        # YOLOv8n weights are auto-downloaded by ultralytics on first use, so no action needed here.
-        # ViTPose-B weights are auto-downloaded by HuggingFace transformers on first use, so no action needed here.
+        # YOLOv8n weights are auto-downloaded by ultralytics
+        # on first use, so no action needed here.
+        # ViTPose-B weights are auto-downloaded by HuggingFace 
+        # transformers on first use, so no action needed here.
         pass
 
     def _load(self) -> None:
