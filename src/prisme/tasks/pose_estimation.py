@@ -30,8 +30,6 @@ import numpy as np
 import torch
 
 from prisme.base import BaseTask
-from ultralytics import YOLO
-from transformers import AutoProcessor, VitPoseForPoseEstimation
 
 # ── HuggingFace model identifier ───────────────────────────────────────────
 _VITPOSE_MODEL_ID = "usyd-community/vitpose-base-simple"
@@ -103,8 +101,35 @@ class PoseEstimationTask(BaseTask):
 
     """
 
+    # All YOLO detection models supported as person detectors.
+    # Larger = more accurate but slower. yolov8n is the default for real-time use.
+    YOLO_MODELS = {
+        # YOLOv8
+        "yolov8n",
+        "yolov8s",
+        "yolov8m",
+        "yolov8l",
+        "yolov8x",
+        # YOLOv9
+        "yolov9c",
+        "yolov9e",
+        # YOLOv10
+        "yolov10n",
+        "yolov10s",
+        "yolov10m",
+        "yolov10l",
+        "yolov10x",
+        # YOLO11
+        "yolo11n",
+        "yolo11s",
+        "yolo11m",
+        "yolo11l",
+        "yolo11x",
+    }
+
     def __init__(
         self,
+        det_model: str = "yolov8n",
         det_conf: float = 0.3,
         det_iou: float = 0.45,
         kp_conf: float = 0.3,
@@ -113,6 +138,13 @@ class PoseEstimationTask(BaseTask):
         bbox_pad: float = 0.1,
     ) -> None:
         super().__init__(name="pose_estimation")
+        model_key = det_model.removesuffix(".pt")
+        if model_key not in self.YOLO_MODELS:
+            raise ValueError(
+                f"Unknown YOLO model '{det_model}'. "
+                f"Available: {sorted(self.YOLO_MODELS)}"
+            )
+        self.det_model = model_key + ".pt"
         self.det_conf = det_conf
         self.det_iou = det_iou
         self.kp_conf = kp_conf
@@ -128,14 +160,18 @@ class PoseEstimationTask(BaseTask):
     # ── BaseTask interface ──────────────────────────────────────────────────
 
     def _download_weights_if_missing(self) -> None:
-        """HuggingFace auto-downloads ViTPose weights on first use — nothing to do here."""
+        # YOLOv8n weights are auto-downloaded by ultralytics on first use, so no action needed here.
+        # ViTPose-B weights are auto-downloaded by HuggingFace transformers on first use, so no action needed here.
         pass
 
     def _load(self) -> None:
+        from ultralytics import YOLO
+        from transformers import AutoProcessor, VitPoseForPoseEstimation
+
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Person detector — YOLOv8n, auto-downloads weights on first use
-        self._detector = YOLO("yolov8n.pt")
+        # Person detector — weights auto-download from ultralytics on first use
+        self._detector = YOLO(self.det_model)
 
         # ViTPose-B — weights auto-download from HuggingFace Hub (~330 MB)
         self._processor = AutoProcessor.from_pretrained(_VITPOSE_MODEL_ID)
