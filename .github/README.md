@@ -43,8 +43,10 @@ Built for autonomous driving scene understanding, but equally powerful for any o
 ## Installation
 
 ```bash
-git clone https://github.com/dronefreak/prisme.git  
+git clone https://github.com/dronefreak/prisme.git
 cd prisme
+python -m venv .venv
+source .venv/bin/activate
 pip install -e .
 ```
 
