@@ -13,6 +13,10 @@ build/
 # Pytest cache
 .pytest_cache
 
+# CSV files and JSON files
+*.csv
+*.json
+
 # Pytorch model checkpoints
 *.pt
 *.pth
