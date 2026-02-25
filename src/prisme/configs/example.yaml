@@ -36,3 +36,34 @@ tasks:
     kp_radius: 4             # keypoint dot size in pixels
     limb_thickness: 2        # skeleton line thickness
     bbox_pad: 0.1            # fractional padding added around each person bbox
+
+
+benchmark:
+
+  # ── Input source (set one, leave the other at its null/false default) ───
+  input: null             # path/to/video.mp4 or path/to/frame.jpg
+  random: false           # true → generate synthetic solid-grey frames
+
+  # Resolution used when random: true (ignored otherwise)
+  random_width:  1920
+  random_height: 1080
+
+  # ── Tasks ───────────────────────────────────────────────────────────────
+  # Use [all] to run every registered task, or list specific ones:
+  #   tasks: [depth_estimation, lane_detection, surface_normals]
+  tasks:
+    - all
+
+  # ── Timing ──────────────────────────────────────────────────────────────
+  warmup: 5               # frames discarded before timing starts (JIT warm-up)
+  runs:   50              # timed frames per task
+
+  # ── Stack benchmark ─────────────────────────────────────────────────────
+  # Loads all tasks simultaneously and times the full pipeline together,
+  # simulating real multi-task deployment with shared GPU memory pressure.
+  stack: false
+
+  # ── Output ──────────────────────────────────────────────────────────────
+  show_table: true        # print Rich table + AD suitability notes to terminal
+  out:  null              # path to write JSON results (null = skip)
+  csv:  null              # path to write CSV results  (null = skip)
