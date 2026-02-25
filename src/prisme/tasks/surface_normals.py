@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 from prisme.base import BaseTask
-from helpers.console_factory import RichConsoleManager
+from prisme.helpers.console_factory import RichConsoleManager
 
 DSINE_WEIGHTS_URL = "https://huggingface.co/camenduru/DSINE/resolve/main/dsine.pt"
 
