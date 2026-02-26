@@ -34,7 +34,7 @@ from rich.text import Text
 from prisme.io.loader import Loader
 from prisme.base import BaseTask
 from prisme.viz.tiler import tile, _grid_shape
-from prisme.helpers.console_factory import RichConsoleManager
+from prisme.utils.console_factory import RichConsoleManager
 
 console = RichConsoleManager.get_console()
 
@@ -43,14 +43,12 @@ console = RichConsoleManager.get_console()
 # Task colour map — one accent per task for the loading table
 # ---------------------------------------------------------------------------
 _TASK_COLOURS = {
-    "surface_normals": "cyan",
-    "object_detection": "bright_yellow",
-    "semantic_segmentation": "bright_green",
-    "depth_estimation": "bright_magenta",
-    "panoptic_segmentation": "bright_cyan",
-    "lane_detection": "bright_blue",
-    "hybridnets": "bright_red",
-    "pose_estimation": "bright_magenta",
+    "surface_normals":      "cyan",
+    "object_detection":     "bright_yellow",
+    "semantic_segmentation":"bright_green",
+    "depth_estimation":     "bright_magenta",
+    "panoptic_segmentation":"bright_cyan",
+    "lane_detection":       "bright_blue",
 }
 _FALLBACK_COLOUR = "white"
 
@@ -62,7 +60,6 @@ def _task_colour(name: str) -> str:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
 
 def _init_video_writer(
     output_path: Path,
@@ -84,7 +81,6 @@ def _init_video_writer(
 
     Raises:
         RuntimeError: If the VideoWriter fails to open.
-
     """
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
@@ -109,10 +105,8 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
 
     Raises:
         ValueError: If an unknown task name is provided.
-
     """
     from prisme.tasks.surface_normals import SurfaceNormalsTask
-
     # from prisme.tasks.object_detection import ObjectDetectionTask
     from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
     from prisme.tasks.depth_estimation import DepthEstimationTask
@@ -121,35 +115,31 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
     from prisme.tasks.pose_estimation import PoseEstimationTask
 
     TASK_REGISTRY = {
-        "surface_normals": SurfaceNormalsTask,
-        # "object_detection": ObjectDetectionTask,
+        "surface_normals":       SurfaceNormalsTask,
+        # "object_detection":      ObjectDetectionTask,
         "semantic_segmentation": SemanticSegmentationTask,
-        "depth_estimation": DepthEstimationTask,
+        "depth_estimation":      DepthEstimationTask,
         "panoptic_segmentation": PanopticSegmentationTask,
-        "hybridnets": HybridNetsTask,
-        "pose_estimation": PoseEstimationTask,
+        "hybridnets":            HybridNetsTask,
+        "pose_estimation":       PoseEstimationTask,
     }
 
     # ---- header -----------------------------------------------------------
     console.print(Rule("[bold]Loading Tasks[/bold]", style="dim"))
 
     tasks: List[BaseTask] = []
-    for task_cfg in cfg.tasks:
-        name = task_cfg.name
+    for name, task_cfg in cfg.tasks.items():
         if name not in TASK_REGISTRY:
             raise ValueError(
-                f"Unknown task '{name}'. Available tasks: {list(TASK_REGISTRY.keys())}"
+                f"Unknown task '{name}'. "
+                f"Available tasks: {list(TASK_REGISTRY.keys())}"
             )
 
-        task_kwargs = {
-            k: v for k, v in OmegaConf.to_container(task_cfg).items() if k != "name"
-        }
+        task_kwargs = OmegaConf.to_container(task_cfg, resolve=True) if task_cfg else {}
 
         colour = _task_colour(name)
         # Params as a compact inline string
-        params_str = "  ".join(
-            f"[dim]{k}[/dim]=[bold]{v}[/bold]" for k, v in task_kwargs.items()
-        )
+        params_str = "  ".join(f"[dim]{k}[/dim]=[bold]{v}[/bold]" for k, v in task_kwargs.items())
 
         with console.status(
             f"[{colour}]Loading [bold]{name}[/bold]…[/{colour}]",
@@ -162,7 +152,8 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
 
         console.print(
             f"  [{colour}]✔[/{colour}] [bold]{name}[/bold]"
-            f"  [dim]({elapsed:.1f}s)[/dim]" + (f"  {params_str}" if params_str else "")
+            f"  [dim]({elapsed:.1f}s)[/dim]"
+            + (f"  {params_str}" if params_str else "")
         )
         tasks.append(task)
 
@@ -186,13 +177,13 @@ def _print_run_summary(
     info.add_column(style="dim", justify="right")
     info.add_column()
 
-    info.add_row("Input", f"[bold path]{input_path}[/bold path]")
+    info.add_row("Input",  f"[bold path]{input_path}[/bold path]")
     info.add_row("Output", f"[bold path]{output_path}[/bold path]")
 
     if meta.get("frame_count"):
         info.add_row("Frames", f"[bold]{meta['frame_count']}[/bold]")
     if meta.get("fps"):
-        info.add_row("FPS", f"[bold]{meta['fps']:.2f}[/bold]")
+        info.add_row("FPS",    f"[bold]{meta['fps']:.2f}[/bold]")
     if meta.get("width") and meta.get("height"):
         info.add_row(
             "Input res",
@@ -201,7 +192,8 @@ def _print_run_summary(
 
     info.add_row(
         "Output res",
-        f"[bold]{out_width} × {out_height}[/bold]  [dim]({rows} × {cols} grid)[/dim]",
+        f"[bold]{out_width} × {out_height}[/bold]  "
+        f"[dim]({rows} × {cols} grid)[/dim]",
     )
 
     # ---- Task pills -------------------------------------------------------
@@ -221,54 +213,46 @@ def _print_run_summary(
 # Public entry point
 # ---------------------------------------------------------------------------
 
-
 def run(cfg: DictConfig) -> None:
     """
     Run the full prisme pipeline from config.
 
     Args:
         cfg: Hydra config object containing input, output, and task definitions.
-
     """
-    input_path = cfg.input
+    input_path  = cfg.input
     output_path = Path(cfg.output)
-    tile_width = cfg.get("tile_width", 640)
+    tile_width  = cfg.get("tile_width", 640)
     tile_height = cfg.get("tile_height", 480)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # ---- Load input -------------------------------------------------------
     loader = Loader(input_path)
-    meta = loader.metadata()
+    meta   = loader.metadata()
 
     # ---- Load tasks -------------------------------------------------------
-    tasks = _resolve_tasks(cfg)
+    tasks   = _resolve_tasks(cfg)
     n_tiles = len(tasks) + 1  # +1 for the original frame
 
-    rows, cols = _grid_shape(n_tiles)
-    out_width = cols * tile_width
-    out_height = rows * tile_height
+    rows, cols  = _grid_shape(n_tiles)
+    out_width   = cols * tile_width
+    out_height  = rows * tile_height
 
     _print_run_summary(
-        input_path,
-        output_path,
-        meta,
-        tasks,
-        out_width,
-        out_height,
-        rows,
-        cols,
+        input_path, output_path, meta, tasks,
+        out_width, out_height, rows, cols,
     )
 
     # ---- Set up writer ----------------------------------------------------
     writer = None
     if loader.is_video:
-        fps = meta.get("fps") or 30.0
+        fps    = meta.get("fps") or 30.0
         writer = _init_video_writer(output_path, out_width, out_height, fps)
 
     # ---- Frame loop with Rich progress bar --------------------------------
     frame_count = meta.get("frame_count") or 0  # 0 = unknown (image)
-    total = frame_count if frame_count > 0 else None
+    total       = frame_count if frame_count > 0 else None
 
     progress = Progress(
         SpinnerColumn(),
@@ -293,8 +277,8 @@ def run(cfg: DictConfig) -> None:
 
         for frame_idx, frame in loader.frames():
             task_outputs = [task.infer(frame) for task in tasks]
-            tiles = [frame] + task_outputs
-            tiled_frame = tile(tiles, tile_width=tile_width, tile_height=tile_height)
+            tiles        = [frame] + task_outputs
+            tiled_frame  = tile(tiles, tile_width=tile_width, tile_height=tile_height)
 
             if writer is not None:
                 writer.write(tiled_frame)

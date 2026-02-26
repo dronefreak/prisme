@@ -94,7 +94,6 @@ _TASK_COLOURS = {
 def _load_task(name: str, task_kwargs: dict | None = None):
     """Instantiate a task by name, forwarding kwargs from the pipeline config."""
     from prisme.tasks.surface_normals import SurfaceNormalsTask
-
     # from prisme.tasks.object_detection import ObjectDetectionTask
     from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
     from prisme.tasks.depth_estimation import DepthEstimationTask
@@ -257,11 +256,11 @@ def _benchmark_task(
     # ── Load model ─────────────────────────────────────────────────────────
     t_load_start = time.perf_counter()
     console.print(f"  [dim]Loading model for task '{name}'…[/dim]")
-    console.print(f"  [dim]Task kwargs: {task_kwargs or {}}[/dim]")
+    console.print(f"  [dim]Task parameters: {task_kwargs or {}}[/dim]")
     task = _load_task(name, task_kwargs)
     task.load_model()
     _cuda_sync()
-    console.print("  [dim]Model loaded. Running inference to stabilise VRAM…[/dim]")
+    console.print(f"  [dim]Model loaded. Starting benchmark runs…[/dim]")
     load_time_s = time.perf_counter() - t_load_start
 
     vram_after_load = _vram_allocated_mb()
@@ -653,15 +652,13 @@ def main(cfg: DictConfig) -> None:
             console.print(f"[red]Unknown task '{t}'. Available: {ALL_TASKS}[/red]")
             raise SystemExit(1)
 
-    # Build name → kwargs map from the pipeline tasks: block so model size,
-    # thresholds, etc. are respected exactly as configured for the pipeline.
+    # Build name → kwargs from the pipeline tasks dict so model sizes,
+    # thresholds, etc. are respected exactly as configured.
     task_params: dict[str, dict] = {}
     if hasattr(cfg, "tasks"):
-        for task_cfg in cfg.tasks:
-            tc = OmegaConf.to_container(task_cfg, resolve=True)
-            name = tc.pop("name")
+        for name, task_cfg in cfg.tasks.items():
             if name in task_names:
-                task_params[name] = tc
+                task_params[name] = OmegaConf.to_container(task_cfg, resolve=True) if task_cfg else {}
 
     total_frames = bcfg.warmup + bcfg.runs
 
@@ -716,13 +713,7 @@ def main(cfg: DictConfig) -> None:
             f"[{colour}]Benchmarking [bold]{name}[/bold]…[/{colour}]",
             spinner="dots",
         ):
-            r = _benchmark_task(
-                name,
-                frames,
-                warmup=bcfg.warmup,
-                runs=bcfg.runs,
-                task_kwargs=task_params.get(name),
-            )
+            r = _benchmark_task(name, frames, warmup=bcfg.warmup, runs=bcfg.runs, task_kwargs=task_params.get(name))
 
         rt_icon = (
             "[bold green]✔ RT[/bold green]" if r.realtime else "[bold red]✘[/bold red]"
@@ -740,13 +731,7 @@ def main(cfg: DictConfig) -> None:
         with console.status(
             "[bold white]Benchmarking full stack…[/bold white]", spinner="dots"
         ):
-            r = _benchmark_stack(
-                task_names,
-                frames,
-                warmup=bcfg.warmup,
-                runs=bcfg.runs,
-                task_params=task_params,
-            )
+            r = _benchmark_stack(task_names, frames, warmup=bcfg.warmup, runs=bcfg.runs, task_params=task_params)
         console.print(
             f"  [bold white]✔ FULL STACK[/bold white]  "
             f"mean=[bold]{r.mean_ms:.1f}ms[/bold]  "

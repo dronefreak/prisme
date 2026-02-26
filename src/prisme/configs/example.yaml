@@ -3,44 +3,58 @@ input: video.mp4
 output: result.mp4
 tile_width: 640
 tile_height: 480
-resize_before_inference: true
+
+# ── Tasks ─────────────────────────────────────────────────────────────────
+# Dict-keyed by task name. Comment out a block to disable that task.
+# Execution order follows the order defined here.
+# Any param can be overridden at the CLI with Hydra dot-notation, e.g.:
+#   prisme tasks.semantic_segmentation.segformer_model=b0
+#   prisme tasks.depth_estimation.model_size=large
 
 tasks:
-  # - name: surface_normals
+
+  # surface_normals:
   #   resize_before_inference: 1280
-  # - name: panoptic_segmentation
-  #   model_size: small # options: small, medium, large
+
+  # panoptic_segmentation:
+  #   model_size: small           # options: small, medium, large
   #   alpha: 0.6
   #   resize_before_inference: 1280
-  - name: object_detection
+
+  object_detection:
     threshold: 0.4
     resize_before_inference: 1280
-    rfdetr_model: base # options: nano, medium, base, large
-  - name: semantic_segmentation
+    rfdetr_model: base            # options: nano, medium, base, large
+
+  semantic_segmentation:
+    segformer_model: b2           # options: b0, b1, b2, b3, b4, b5
     resize_before_inference: 1280
-    segformer_model: b2 # options: b0, b1, b2, b3, b4, b5
-  - name: depth_estimation
+
+  depth_estimation:
+    model_size: base              # options: small, base, large
     resize_before_inference: 1280
-    model_size: base # options: small, base, large
-  - name: hybridnets
-    road_alpha: 0.4          # drivable area overlay opacity
-    lane_alpha: 0.6          # lane line overlay opacity
-    conf_road: 0.5           # softmax threshold for road class
-    conf_lane: 0.5           # softmax threshold for lane class
-    resize_before_inference: 0  # set e.g. 1280 to cap on 4K input
-  - name: pose_estimation
-    det_model: yolov8n       # options: yolo8n, yolo8m, yolo8l, yolo8x
-    det_conf: 0.3            # YOLOv8n person detection confidence
-    det_iou: 0.45            # NMS IoU threshold
-    kp_conf: 0.3             # minimum heatmap confidence to draw a keypoint
-    kp_radius: 4             # keypoint dot size in pixels
-    limb_thickness: 2        # skeleton line thickness
-    bbox_pad: 0.1            # fractional padding added around each person bbox
+
+  hybridnets:
+    road_alpha: 0.4               # drivable area overlay opacity
+    lane_alpha: 0.6               # lane line overlay opacity
+    conf_road: 0.5                # softmax threshold for road class
+    conf_lane: 0.5                # softmax threshold for lane class
+    resize_before_inference: 0    # set e.g. 1280 to cap on 4K input
+
+  pose_estimation:
+    det_model: yolov8n            # options: yolov8n/s/m/l/x, yolov9c/e, yolov10n-x, yolo11n-x
+    det_conf: 0.3
+    det_iou: 0.45
+    kp_conf: 0.3
+    kp_radius: 4
+    limb_thickness: 2
+    bbox_pad: 0.1
 
 
+# ── Benchmark ──────────────────────────────────────────────────────────────
 benchmark:
 
-  # ── Input source (set one, leave the other at its null/false default) ───
+  # Input source — set one, leave the other at its default
   input: null             # path/to/video.mp4 or path/to/frame.jpg
   random: false           # true → generate synthetic solid-grey frames
 
@@ -48,22 +62,17 @@ benchmark:
   random_width:  1920
   random_height: 1080
 
-  # ── Tasks ───────────────────────────────────────────────────────────────
-  # Use [all] to run every registered task, or list specific ones:
-  #   tasks: [depth_estimation, lane_detection, surface_normals]
+  # Tasks to benchmark — mirrors keys from the tasks: block above, or 'all'
+  #   tasks: [depth_estimation, semantic_segmentation]
   tasks:
     - all
 
-  # ── Timing ──────────────────────────────────────────────────────────────
   warmup: 5               # frames discarded before timing starts (JIT warm-up)
   runs:   50              # timed frames per task
 
-  # ── Stack benchmark ─────────────────────────────────────────────────────
-  # Loads all tasks simultaneously and times the full pipeline together,
-  # simulating real multi-task deployment with shared GPU memory pressure.
+  # Also benchmark the full multi-task stack together
   stack: false
 
-  # ── Output ──────────────────────────────────────────────────────────────
   show_table: true        # print Rich table + AD suitability notes to terminal
   out:  null              # path to write JSON results (null = skip)
   csv:  null              # path to write CSV results  (null = skip)
