@@ -21,34 +21,34 @@ tasks:
   #   alpha: 0.6
   #   resize_before_inference: 1280
 
-  # object_detection:
-  #   threshold: 0.4
-  #   resize_before_inference: 1280
-  #   rfdetr_model: base            # options: nano, medium, base, large
+  object_detection:
+    threshold: 0.4
+    resize_before_inference: 1280
+    rfdetr_model: base            # options: nano, medium, base, large
 
-  # semantic_segmentation:
-  #   segformer_model: b2           # options: b0, b1, b2, b3, b4, b5
-  #   resize_before_inference: 1280
+  semantic_segmentation:
+    segformer_model: b2           # options: b0, b1, b2, b3, b4, b5
+    resize_before_inference: 1280
 
-  # depth_estimation:
-  #   model_size: base              # options: small, base, large
-  #   resize_before_inference: 1280
+  depth_estimation:
+    model_size: base              # options: small, base, large
+    resize_before_inference: 1280
 
-  # hybridnets:
-  #   road_alpha: 0.4               # drivable area overlay opacity
-  #   lane_alpha: 0.6               # lane line overlay opacity
-  #   conf_road: 0.5                # softmax threshold for road class
-  #   conf_lane: 0.5                # softmax threshold for lane class
-  #   resize_before_inference: 0    # set e.g. 1280 to cap on 4K input
+  hybridnets:
+    road_alpha: 0.4               # drivable area overlay opacity
+    lane_alpha: 0.6               # lane line overlay opacity
+    conf_road: 0.5                # softmax threshold for road class
+    conf_lane: 0.5                # softmax threshold for lane class
+    resize_before_inference: 0    # set e.g. 1280 to cap on 4K input
 
-  # pose_estimation:
-  #   det_model: yolov8n            # options: yolov8n/s/m/l/x, yolov9c/e, yolov10n-x, yolo11n-x
-  #   det_conf: 0.3
-  #   det_iou: 0.45
-  #   kp_conf: 0.3
-  #   kp_radius: 4
-  #   limb_thickness: 2
-  #   bbox_pad: 0.1
+  pose_estimation:
+    det_model: yolov8n            # options: yolov8n/s/m/l/x, yolov9c/e, yolov10n-x, yolo11n-x
+    det_conf: 0.3
+    det_iou: 0.45
+    kp_conf: 0.3
+    kp_radius: 4
+    limb_thickness: 2
+    bbox_pad: 0.1
 
   yolo_detection:
     model: yolov8n                # options: yolov8n/s/m/l/x, yolov9c/e, yolov10n-x, yolo11n-x
