@@ -112,7 +112,8 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
 
     """
     from prisme.tasks.surface_normals import SurfaceNormalsTask
-    from prisme.tasks.object_detection import ObjectDetectionTask
+
+    # from prisme.tasks.object_detection import ObjectDetectionTask
     from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
     from prisme.tasks.depth_estimation import DepthEstimationTask
     from prisme.tasks.panoptic_segmentation import PanopticSegmentationTask
@@ -121,7 +122,7 @@ def _resolve_tasks(cfg: DictConfig) -> List[BaseTask]:
 
     TASK_REGISTRY = {
         "surface_normals": SurfaceNormalsTask,
-        "object_detection": ObjectDetectionTask,
+        # "object_detection": ObjectDetectionTask,
         "semantic_segmentation": SemanticSegmentationTask,
         "depth_estimation": DepthEstimationTask,
         "panoptic_segmentation": PanopticSegmentationTask,
