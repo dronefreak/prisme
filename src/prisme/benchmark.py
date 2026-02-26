@@ -94,7 +94,7 @@ _TASK_COLOURS = {
 def _load_task(name: str):
     """Import and instantiate a task by name with default params."""
     from prisme.tasks.surface_normals import SurfaceNormalsTask
-    from prisme.tasks.object_detection import ObjectDetectionTask
+    # from prisme.tasks.object_detection import ObjectDetectionTask
     from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
     from prisme.tasks.depth_estimation import DepthEstimationTask
     from prisme.tasks.panoptic_segmentation import PanopticSegmentationTask
@@ -103,7 +103,7 @@ def _load_task(name: str):
 
     registry = {
         "surface_normals": SurfaceNormalsTask,
-        "object_detection": ObjectDetectionTask,
+        # "object_detection": ObjectDetectionTask,
         "semantic_segmentation": SemanticSegmentationTask,
         "depth_estimation": DepthEstimationTask,
         "panoptic_segmentation": PanopticSegmentationTask,
