@@ -91,9 +91,10 @@ _TASK_COLOURS = {
 }
 
 
-def _load_task(name: str):
-    """Import and instantiate a task by name with default params."""
+def _load_task(name: str, task_kwargs: dict | None = None):
+    """Instantiate a task by name, forwarding kwargs from the pipeline config."""
     from prisme.tasks.surface_normals import SurfaceNormalsTask
+
     # from prisme.tasks.object_detection import ObjectDetectionTask
     from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
     from prisme.tasks.depth_estimation import DepthEstimationTask
@@ -110,7 +111,7 @@ def _load_task(name: str):
         "hybridnets": HybridNetsTask,
         "pose_estimation": PoseEstimationTask,
     }
-    return registry[name]()
+    return registry[name](**(task_kwargs or {}))
 
 
 # ── Frame loading ──────────────────────────────────────────────────────────
@@ -239,6 +240,7 @@ def _benchmark_task(
     frames: list[np.ndarray],
     warmup: int,
     runs: int,
+    task_kwargs: dict | None = None,
 ) -> BenchResult:
     """Benchmark a single task in isolation."""
     errors: list[str] = []
@@ -254,9 +256,12 @@ def _benchmark_task(
 
     # ── Load model ─────────────────────────────────────────────────────────
     t_load_start = time.perf_counter()
-    task = _load_task(name)
+    console.print(f"  [dim]Loading model for task '{name}'…[/dim]")
+    console.print(f"  [dim]Task kwargs: {task_kwargs or {}}[/dim]")
+    task = _load_task(name, task_kwargs)
     task.load_model()
     _cuda_sync()
+    console.print("  [dim]Model loaded. Running inference to stabilise VRAM…[/dim]")
     load_time_s = time.perf_counter() - t_load_start
 
     vram_after_load = _vram_allocated_mb()
@@ -360,9 +365,11 @@ def _benchmark_stack(
     frames: list[np.ndarray],
     warmup: int,
     runs: int,
+    task_params: dict[str, dict] | None = None,
 ) -> BenchResult:
     """Benchmark all tasks running together (simulates real deployment)."""
     errors: list[str] = []
+    task_params = task_params or {}
 
     gc.collect()
     if _cuda_available():
@@ -376,8 +383,9 @@ def _benchmark_stack(
     t_load = time.perf_counter()
     tasks = []
     for name in task_names:
-        t = _load_task(name)
+        t = _load_task(name, task_params.get(name))
         t.load_model()
+        tasks.append(t)
     _cuda_sync()
     load_time_s = time.perf_counter() - t_load
 
@@ -637,13 +645,23 @@ def main(cfg: DictConfig) -> None:
         )
         raise SystemExit(1)
 
-    # ── Resolve task list ──────────────────────────────────────────────────
+    # ── Resolve task list + params from pipeline config ────────────────────
     raw_tasks = OmegaConf.to_container(bcfg.tasks, resolve=True)
     task_names = ALL_TASKS if raw_tasks == ["all"] else list(raw_tasks)
     for t in task_names:
         if t not in ALL_TASKS:
             console.print(f"[red]Unknown task '{t}'. Available: {ALL_TASKS}[/red]")
             raise SystemExit(1)
+
+    # Build name → kwargs map from the pipeline tasks: block so model size,
+    # thresholds, etc. are respected exactly as configured for the pipeline.
+    task_params: dict[str, dict] = {}
+    if hasattr(cfg, "tasks"):
+        for task_cfg in cfg.tasks:
+            tc = OmegaConf.to_container(task_cfg, resolve=True)
+            name = tc.pop("name")
+            if name in task_names:
+                task_params[name] = tc
 
     total_frames = bcfg.warmup + bcfg.runs
 
@@ -698,7 +716,13 @@ def main(cfg: DictConfig) -> None:
             f"[{colour}]Benchmarking [bold]{name}[/bold]…[/{colour}]",
             spinner="dots",
         ):
-            r = _benchmark_task(name, frames, warmup=bcfg.warmup, runs=bcfg.runs)
+            r = _benchmark_task(
+                name,
+                frames,
+                warmup=bcfg.warmup,
+                runs=bcfg.runs,
+                task_kwargs=task_params.get(name),
+            )
 
         rt_icon = (
             "[bold green]✔ RT[/bold green]" if r.realtime else "[bold red]✘[/bold red]"
@@ -716,7 +740,13 @@ def main(cfg: DictConfig) -> None:
         with console.status(
             "[bold white]Benchmarking full stack…[/bold white]", spinner="dots"
         ):
-            r = _benchmark_stack(task_names, frames, warmup=bcfg.warmup, runs=bcfg.runs)
+            r = _benchmark_stack(
+                task_names,
+                frames,
+                warmup=bcfg.warmup,
+                runs=bcfg.runs,
+                task_params=task_params,
+            )
         console.print(
             f"  [bold white]✔ FULL STACK[/bold white]  "
             f"mean=[bold]{r.mean_ms:.1f}ms[/bold]  "
