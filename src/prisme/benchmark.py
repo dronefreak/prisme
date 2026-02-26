@@ -77,6 +77,8 @@ ALL_TASKS = [
     "panoptic_segmentation",
     "hybridnets",
     "pose_estimation",
+    "yolo_detection",
+    "yolo_segmentation",
 ]
 
 _TASK_COLOURS = {
@@ -87,6 +89,8 @@ _TASK_COLOURS = {
     "panoptic_segmentation": "bright_cyan",
     "hybridnets": "bright_blue",
     "pose_estimation": "bright_red",
+    "yolo_detection": "yellow",
+    "yolo_segmentation": "green",
     "FULL STACK": "bold white",
 }
 
@@ -94,21 +98,26 @@ _TASK_COLOURS = {
 def _load_task(name: str, task_kwargs: dict | None = None):
     """Instantiate a task by name, forwarding kwargs from the pipeline config."""
     from prisme.tasks.surface_normals import SurfaceNormalsTask
+
     # from prisme.tasks.object_detection import ObjectDetectionTask
     from prisme.tasks.semantic_segmentation import SemanticSegmentationTask
     from prisme.tasks.depth_estimation import DepthEstimationTask
     from prisme.tasks.panoptic_segmentation import PanopticSegmentationTask
     from prisme.tasks.hybridnets import HybridNetsTask
     from prisme.tasks.pose_estimation import PoseEstimationTask
+    from prisme.tasks.yolo_detection import YOLODetectionTask
+    from prisme.tasks.yolo_segmentation import YOLOSegmentationTask
 
     registry = {
         "surface_normals": SurfaceNormalsTask,
-        # "object_detection": ObjectDetectionTask,
+        # "object_detection":    ObjectDetectionTask,
         "semantic_segmentation": SemanticSegmentationTask,
         "depth_estimation": DepthEstimationTask,
         "panoptic_segmentation": PanopticSegmentationTask,
         "hybridnets": HybridNetsTask,
         "pose_estimation": PoseEstimationTask,
+        "yolo_detection": YOLODetectionTask,
+        "yolo_segmentation": YOLOSegmentationTask,
     }
     return registry[name](**(task_kwargs or {}))
 
@@ -255,12 +264,14 @@ def _benchmark_task(
 
     # ── Load model ─────────────────────────────────────────────────────────
     t_load_start = time.perf_counter()
-    console.print(f"  [dim]Loading model for task '{name}'…[/dim]")
-    console.print(f"  [dim]Task parameters: {task_kwargs or {}}[/dim]")
+    console.print(f"  [dim]Loading model for {name}…[/dim]")
+    console.print(
+        f"Kwargs: {task_kwargs}" if task_kwargs else "  [dim]No special kwargs[/dim]"
+    )
     task = _load_task(name, task_kwargs)
     task.load_model()
     _cuda_sync()
-    console.print(f"  [dim]Model loaded. Starting benchmark runs…[/dim]")
+    console.print("  [dim]Model loaded. Starting benchmark…[/dim]")
     load_time_s = time.perf_counter() - t_load_start
 
     vram_after_load = _vram_allocated_mb()
@@ -658,7 +669,9 @@ def main(cfg: DictConfig) -> None:
     if hasattr(cfg, "tasks"):
         for name, task_cfg in cfg.tasks.items():
             if name in task_names:
-                task_params[name] = OmegaConf.to_container(task_cfg, resolve=True) if task_cfg else {}
+                task_params[name] = (
+                    OmegaConf.to_container(task_cfg, resolve=True) if task_cfg else {}
+                )
 
     total_frames = bcfg.warmup + bcfg.runs
 
@@ -713,7 +726,13 @@ def main(cfg: DictConfig) -> None:
             f"[{colour}]Benchmarking [bold]{name}[/bold]…[/{colour}]",
             spinner="dots",
         ):
-            r = _benchmark_task(name, frames, warmup=bcfg.warmup, runs=bcfg.runs, task_kwargs=task_params.get(name))
+            r = _benchmark_task(
+                name,
+                frames,
+                warmup=bcfg.warmup,
+                runs=bcfg.runs,
+                task_kwargs=task_params.get(name),
+            )
 
         rt_icon = (
             "[bold green]✔ RT[/bold green]" if r.realtime else "[bold red]✘[/bold red]"
@@ -731,7 +750,13 @@ def main(cfg: DictConfig) -> None:
         with console.status(
             "[bold white]Benchmarking full stack…[/bold white]", spinner="dots"
         ):
-            r = _benchmark_stack(task_names, frames, warmup=bcfg.warmup, runs=bcfg.runs, task_params=task_params)
+            r = _benchmark_stack(
+                task_names,
+                frames,
+                warmup=bcfg.warmup,
+                runs=bcfg.runs,
+                task_params=task_params,
+            )
         console.print(
             f"  [bold white]✔ FULL STACK[/bold white]  "
             f"mean=[bold]{r.mean_ms:.1f}ms[/bold]  "
