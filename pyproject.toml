@@ -19,6 +19,8 @@ dependencies = [
     # HuggingFace (SegFormer, Mask2Former, DepthAnything, ViTPose-B)
     "transformers>=4.40.0",   # ViTPose added in 4.40
     "huggingface-hub>=0.20.0",
+    "supervision>=0.20.0",
+    "rfdetr>=1.5.0",
     "timm==0.5.4",            # backbone dep for several HF vision models
 
     # Pose estimation detector
