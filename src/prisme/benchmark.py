@@ -186,6 +186,18 @@ def _cuda_available() -> bool:
     return torch.cuda.is_available()
 
 
+def _vram_total_mb() -> float:
+    if not _cuda_available():
+        return 0.0
+    return torch.cuda.get_device_properties(0).total_memory / 1024**2
+
+
+def _ram_total_mb() -> float:
+    if not _PSUTIL:
+        return 0.0
+    return psutil.virtual_memory().total / 1024**2
+
+
 def _vram_allocated_mb() -> float:
     if not _cuda_available():
         return 0.0
@@ -232,10 +244,20 @@ class BenchResult:
     min_ms: float
     max_ms: float
     fps: float
-    realtime: bool  # fps >= 30
-    vram_model_mb: float  # VRAM after model load
-    vram_peak_mb: float  # peak VRAM during timed inference
-    cpu_rss_delta_mb: float
+    realtime: bool              # fps >= 30
+    # ── Absolute memory ──────────────────────────────────────────────────
+    vram_total_mb: float        # total GPU memory on device
+    vram_model_mb: float        # model footprint after forced GPU load
+    vram_peak_mb: float         # peak VRAM during timed inference
+    cpu_rss_delta_mb: float     # process RSS delta
+    ram_total_mb: float         # total system RAM
+    # ── Resource % ───────────────────────────────────────────────────────
+    vram_model_pct: float       # model_mb / total_vram * 100
+    vram_peak_pct: float        # peak_mb  / total_vram * 100
+    vram_headroom_pct: float    # 100 - peak_pct (GPU memory left for other tasks)
+    ram_used_pct: float         # rss_delta / total_ram * 100
+    cpu_util_mean_pct: float    # mean CPU% sampled per inference frame
+    cpu_util_p99_pct: float     # P99 CPU% (tail load)
     n_runs: int
     errors: list[str] = field(default_factory=list)
 
@@ -252,6 +274,8 @@ def _benchmark_task(
 ) -> BenchResult:
     """Benchmark a single task in isolation."""
     errors: list[str] = []
+    vram_total = _vram_total_mb()
+    ram_total  = _ram_total_mb()
 
     # ── Baseline memory ────────────────────────────────────────────────────
     gc.collect()
@@ -259,27 +283,35 @@ def _benchmark_task(
         torch.cuda.empty_cache()
     _reset_peak_vram()
 
-    cpu_before = _cpu_rss_mb()
+    cpu_before  = _cpu_rss_mb()
     vram_before = _vram_allocated_mb()
 
     # ── Load model ─────────────────────────────────────────────────────────
     t_load_start = time.perf_counter()
-    console.print(f"  [dim]Loading model for {name}…[/dim]")
-    console.print(
-        f"Kwargs: {task_kwargs}" if task_kwargs else "  [dim]No special kwargs[/dim]"
-    )
     task = _load_task(name, task_kwargs)
     task.load_model()
     _cuda_sync()
-    console.print("  [dim]Model loaded. Starting benchmark…[/dim]")
     load_time_s = time.perf_counter() - t_load_start
 
+    # ── Force GPU placement (fixes lazy-load models e.g. ultralytics YOLO) ─
+    # Some frameworks defer the CPU→GPU transfer until first forward pass.
+    # Run one dummy inference, flush activations, then measure true footprint.
+    try:
+        task.infer(frames[0])
+        _cuda_sync()
+    except Exception as e:
+        errors.append(f"gpu_force[0]: {e}")
+    gc.collect()
+    if _cuda_available():
+        torch.cuda.empty_cache()
+    _cuda_sync()
+
     vram_after_load = _vram_allocated_mb()
-    vram_model_mb = max(0.0, vram_after_load - vram_before)
+    vram_model_mb   = max(0.0, vram_after_load - vram_before)
 
     # ── Warmup ─────────────────────────────────────────────────────────────
     warmup_ms = 0.0
-    n_warmup = min(warmup, len(frames))
+    n_warmup  = min(warmup, len(frames))
     for i in range(n_warmup):
         _cuda_sync()
         t0 = time.perf_counter()
@@ -295,7 +327,12 @@ def _benchmark_task(
     # ── Timed runs ─────────────────────────────────────────────────────────
     _reset_peak_vram()
     latencies_ms: list[float] = []
+    cpu_util_samples: list[float] = []
     n_runs = min(runs, len(frames))
+
+    # Prime psutil CPU counter so first sample isn't 0
+    if _PSUTIL:
+        psutil.cpu_percent(interval=None)
 
     for i in range(n_runs):
         frame = frames[i % len(frames)]
@@ -308,9 +345,11 @@ def _benchmark_task(
             continue
         _cuda_sync()
         latencies_ms.append((time.perf_counter() - t0) * 1000)
+        if _PSUTIL:
+            cpu_util_samples.append(psutil.cpu_percent(interval=None))
 
-    vram_peak = _vram_peak_mb()
-    cpu_rss_delta = max(0.0, _cpu_rss_mb() - cpu_before)
+    vram_peak      = _vram_peak_mb()
+    cpu_rss_delta  = max(0.0, _cpu_rss_mb() - cpu_before)
 
     # ── Cleanup ────────────────────────────────────────────────────────────
     del task
@@ -318,53 +357,69 @@ def _benchmark_task(
     if _cuda_available():
         torch.cuda.empty_cache()
 
+    # ── Derived % metrics ──────────────────────────────────────────────────
+    def _pct(part: float, total: float) -> float:
+        return round(part / total * 100, 1) if total > 0 else 0.0
+
+    vram_model_pct   = _pct(vram_model_mb, vram_total)
+    vram_peak_pct    = _pct(vram_peak, vram_total)
+    vram_headroom    = max(0.0, 100.0 - vram_peak_pct)
+    ram_used_pct     = _pct(cpu_rss_delta, ram_total)
+    cpu_util_mean    = float(np.mean(cpu_util_samples))  if cpu_util_samples else 0.0
+    cpu_util_p99     = float(np.percentile(cpu_util_samples, 99)) if cpu_util_samples else 0.0
+
     # ── Stats ──────────────────────────────────────────────────────────────
     if not latencies_ms:
-        # All runs failed
         return BenchResult(
             task=name,
             load_time_s=load_time_s,
             warmup_ms=warmup_ms,
-            mean_ms=0,
-            median_ms=0,
-            p95_ms=0,
-            p99_ms=0,
-            std_ms=0,
-            min_ms=0,
-            max_ms=0,
-            fps=0,
-            realtime=False,
+            mean_ms=0, median_ms=0, p95_ms=0, p99_ms=0,
+            std_ms=0, min_ms=0, max_ms=0,
+            fps=0, realtime=False,
+            vram_total_mb=vram_total,
             vram_model_mb=vram_model_mb,
             vram_peak_mb=vram_peak,
             cpu_rss_delta_mb=cpu_rss_delta,
+            ram_total_mb=ram_total,
+            vram_model_pct=vram_model_pct,
+            vram_peak_pct=vram_peak_pct,
+            vram_headroom_pct=vram_headroom,
+            ram_used_pct=ram_used_pct,
+            cpu_util_mean_pct=cpu_util_mean,
+            cpu_util_p99_pct=cpu_util_p99,
             n_runs=0,
             errors=errors,
         )
 
-    arr = np.array(latencies_ms)
-    mean_ms = float(arr.mean())
-    median_ms = float(np.median(arr))
-    p95_ms = float(np.percentile(arr, 95))
-    p99_ms = float(np.percentile(arr, 99))
-    std_ms = float(arr.std())
-    fps = 1000.0 / mean_ms if mean_ms > 0 else 0.0
+    arr      = np.array(latencies_ms)
+    mean_ms  = float(arr.mean())
+    fps      = 1000.0 / mean_ms if mean_ms > 0 else 0.0
 
     return BenchResult(
         task=name,
         load_time_s=load_time_s,
         warmup_ms=warmup_ms,
         mean_ms=mean_ms,
-        median_ms=median_ms,
-        p95_ms=p95_ms,
-        p99_ms=p99_ms,
-        std_ms=std_ms,
+        median_ms=float(np.median(arr)),
+        p95_ms=float(np.percentile(arr, 95)),
+        p99_ms=float(np.percentile(arr, 99)),
+        std_ms=float(arr.std()),
         min_ms=float(arr.min()),
         max_ms=float(arr.max()),
         fps=fps,
         realtime=fps >= 30.0,
+        vram_total_mb=vram_total,
         vram_model_mb=vram_model_mb,
         vram_peak_mb=vram_peak,
         cpu_rss_delta_mb=cpu_rss_delta,
+        ram_total_mb=ram_total,
+        vram_model_pct=vram_model_pct,
+        vram_peak_pct=vram_peak_pct,
+        vram_headroom_pct=vram_headroom,
+        ram_used_pct=ram_used_pct,
+        cpu_util_mean_pct=cpu_util_mean,
+        cpu_util_p99_pct=cpu_util_p99,
         n_runs=len(latencies_ms),
         errors=errors,
     )
@@ -379,14 +434,16 @@ def _benchmark_stack(
 ) -> BenchResult:
     """Benchmark all tasks running together (simulates real deployment)."""
     errors: list[str] = []
-    task_params = task_params or {}
+    task_params  = task_params or {}
+    vram_total   = _vram_total_mb()
+    ram_total    = _ram_total_mb()
 
     gc.collect()
     if _cuda_available():
         torch.cuda.empty_cache()
     _reset_peak_vram()
 
-    cpu_before = _cpu_rss_mb()
+    cpu_before  = _cpu_rss_mb()
     vram_before = _vram_allocated_mb()
 
     # Load all tasks
@@ -398,6 +455,18 @@ def _benchmark_stack(
         tasks.append(t)
     _cuda_sync()
     load_time_s = time.perf_counter() - t_load
+
+    # Force GPU placement for all tasks (same fix as single-task benchmark)
+    try:
+        for t in tasks:
+            t.infer(frames[0])
+        _cuda_sync()
+    except Exception as e:
+        errors.append(f"gpu_force[0]: {e}")
+    gc.collect()
+    if _cuda_available():
+        torch.cuda.empty_cache()
+    _cuda_sync()
 
     vram_model_mb = max(0.0, _vram_allocated_mb() - vram_before)
 
@@ -421,6 +490,11 @@ def _benchmark_stack(
 
     _reset_peak_vram()
     latencies_ms: list[float] = []
+    cpu_util_samples: list[float] = []
+
+    if _PSUTIL:
+        psutil.cpu_percent(interval=None)
+
     for i in range(min(runs, len(frames))):
         frame = frames[i % len(frames)]
         _cuda_sync()
@@ -432,8 +506,10 @@ def _benchmark_stack(
             continue
         _cuda_sync()
         latencies_ms.append((time.perf_counter() - t0) * 1000)
+        if _PSUTIL:
+            cpu_util_samples.append(psutil.cpu_percent(interval=None))
 
-    vram_peak = _vram_peak_mb()
+    vram_peak     = _vram_peak_mb()
     cpu_rss_delta = max(0.0, _cpu_rss_mb() - cpu_before)
 
     del tasks
@@ -441,30 +517,42 @@ def _benchmark_stack(
     if _cuda_available():
         torch.cuda.empty_cache()
 
+    def _pct(part: float, total: float) -> float:
+        return round(part / total * 100, 1) if total > 0 else 0.0
+
+    vram_model_pct = _pct(vram_model_mb, vram_total)
+    vram_peak_pct  = _pct(vram_peak, vram_total)
+    vram_headroom  = max(0.0, 100.0 - vram_peak_pct)
+    ram_used_pct   = _pct(cpu_rss_delta, ram_total)
+    cpu_util_mean  = float(np.mean(cpu_util_samples))        if cpu_util_samples else 0.0
+    cpu_util_p99   = float(np.percentile(cpu_util_samples, 99)) if cpu_util_samples else 0.0
+
     if not latencies_ms:
         return BenchResult(
             task="FULL STACK",
             load_time_s=load_time_s,
             warmup_ms=warmup_ms,
-            mean_ms=0,
-            median_ms=0,
-            p95_ms=0,
-            p99_ms=0,
-            std_ms=0,
-            min_ms=0,
-            max_ms=0,
-            fps=0,
-            realtime=False,
+            mean_ms=0, median_ms=0, p95_ms=0, p99_ms=0,
+            std_ms=0, min_ms=0, max_ms=0,
+            fps=0, realtime=False,
+            vram_total_mb=vram_total,
             vram_model_mb=vram_model_mb,
             vram_peak_mb=vram_peak,
             cpu_rss_delta_mb=cpu_rss_delta,
+            ram_total_mb=ram_total,
+            vram_model_pct=vram_model_pct,
+            vram_peak_pct=vram_peak_pct,
+            vram_headroom_pct=vram_headroom,
+            ram_used_pct=ram_used_pct,
+            cpu_util_mean_pct=cpu_util_mean,
+            cpu_util_p99_pct=cpu_util_p99,
             n_runs=0,
             errors=errors,
         )
 
-    arr = np.array(latencies_ms)
+    arr     = np.array(latencies_ms)
     mean_ms = float(arr.mean())
-    fps = 1000.0 / mean_ms if mean_ms > 0 else 0.0
+    fps     = 1000.0 / mean_ms if mean_ms > 0 else 0.0
 
     return BenchResult(
         task="FULL STACK",
@@ -479,9 +567,17 @@ def _benchmark_stack(
         max_ms=float(arr.max()),
         fps=fps,
         realtime=fps >= 30.0,
+        vram_total_mb=vram_total,
         vram_model_mb=vram_model_mb,
         vram_peak_mb=vram_peak,
         cpu_rss_delta_mb=cpu_rss_delta,
+        ram_total_mb=ram_total,
+        vram_model_pct=vram_model_pct,
+        vram_peak_pct=vram_peak_pct,
+        vram_headroom_pct=vram_headroom,
+        ram_used_pct=ram_used_pct,
+        cpu_util_mean_pct=cpu_util_mean,
+        cpu_util_p99_pct=cpu_util_p99,
         n_runs=len(latencies_ms),
         errors=errors,
     )
@@ -510,10 +606,35 @@ def _vram_cell(mb: float) -> str:
     return f"{mb:.0f} MB"
 
 
+def _pct_cell(pct: float, warn: float = 60.0, danger: float = 85.0) -> str:
+    """Colour-coded percentage cell: green → yellow → red."""
+    if pct <= 0:
+        return "[dim]—[/dim]"
+    if pct >= danger:
+        return f"[bold red]{pct:.1f}%[/bold red]"
+    if pct >= warn:
+        return f"[yellow]{pct:.1f}%[/yellow]"
+    return f"[green]{pct:.1f}%[/green]"
+
+
+def _headroom_cell(pct: float) -> str:
+    """Headroom — inverse colouring: low headroom is bad."""
+    if pct <= 0:
+        return "[dim]—[/dim]"
+    if pct <= 15:
+        return f"[bold red]{pct:.1f}%[/bold red]"
+    if pct <= 40:
+        return f"[yellow]{pct:.1f}%[/yellow]"
+    return f"[green]{pct:.1f}%[/green]"
+
+
 def _print_table(results: list[BenchResult]) -> None:
     t = Table(
         title="[bold]prisme — Inference Benchmark[/bold]",
-        caption="[dim]P95/P99 latency = tail latency under load (key for AD safety)[/dim]",
+        caption=(
+            "[dim]P95/P99 = tail latency (key for AD safety) · "
+            "VRAM% and CPU% = fraction of total resource used[/dim]"
+        ),
         show_header=True,
         header_style="bold magenta",
         border_style="dim",
@@ -521,39 +642,43 @@ def _print_table(results: list[BenchResult]) -> None:
         expand=False,
     )
 
-    t.add_column("Task", style="bold", no_wrap=True)
-    t.add_column("Load (s)", justify="right")
-    t.add_column("Warmup (ms)", justify="right")
-    t.add_column("Mean (ms)", justify="right")
-    t.add_column("Median (ms)", justify="right")
-    t.add_column("P95 (ms)", justify="right", style="yellow")
-    t.add_column("P99 (ms)", justify="right", style="red")
-    t.add_column("Std (ms)", justify="right", style="dim")
-    t.add_column("FPS / RT", justify="right")
-    t.add_column("VRAM model", justify="right", style="cyan")
-    t.add_column("VRAM peak", justify="right", style="bright_cyan")
-    t.add_column("CPU RSS Δ", justify="right", style="dim")
-    t.add_column("N", justify="right", style="dim")
+    t.add_column("Task",         style="bold", no_wrap=True)
+    t.add_column("Load (s)",     justify="right")
+    t.add_column("Mean (ms)",    justify="right")
+    t.add_column("P95 (ms)",     justify="right", style="yellow")
+    t.add_column("P99 (ms)",     justify="right", style="red")
+    t.add_column("Std (ms)",     justify="right", style="dim")
+    t.add_column("FPS / RT",     justify="right")
+    # ── VRAM ──────────────────────────────────────────────────────────────
+    t.add_column("VRAM model",   justify="right", style="cyan")
+    t.add_column("VRAM%",        justify="right")   # model footprint %
+    t.add_column("Peak VRAM%",   justify="right")   # peak inference %
+    t.add_column("Headroom%",    justify="right")   # GPU left for others
+    # ── CPU / RAM ─────────────────────────────────────────────────────────
+    t.add_column("CPU util%",    justify="right")   # mean CPU during infer
+    t.add_column("CPU P99%",     justify="right")   # tail CPU load
+    t.add_column("RAM Δ%",       justify="right", style="dim")
+    t.add_column("N",            justify="right", style="dim")
 
     for r in results:
-        colour = _TASK_COLOURS.get(r.task, "white")
+        colour    = _TASK_COLOURS.get(r.task, "white")
         name_cell = f"[{colour}]{r.task}[/{colour}]"
 
         t.add_row(
             name_cell,
             f"{r.load_time_s:.2f}",
-            _fmt_ms(r.warmup_ms),
             _fmt_ms(r.mean_ms),
-            _fmt_ms(r.median_ms),
             _fmt_ms(r.p95_ms),
             _fmt_ms(r.p99_ms),
             _fmt_ms(r.std_ms),
             _fps_cell(r),
             _vram_cell(r.vram_model_mb),
-            _vram_cell(r.vram_peak_mb),
-            f"{r.cpu_rss_delta_mb:.0f} MB"
-            if r.cpu_rss_delta_mb > 0
-            else "[dim]—[/dim]",
+            _pct_cell(r.vram_model_pct),
+            _pct_cell(r.vram_peak_pct),
+            _headroom_cell(r.vram_headroom_pct),
+            _pct_cell(r.cpu_util_mean_pct, warn=50, danger=80),
+            _pct_cell(r.cpu_util_p99_pct,  warn=70, danger=90),
+            _pct_cell(r.ram_used_pct,       warn=10, danger=25),
             str(r.n_runs),
         )
 
@@ -575,35 +700,51 @@ def _print_ad_notes(results: list[BenchResult]) -> None:
         colour = _TASK_COLOURS.get(r.task, "white")
         issues = []
 
+        # ── Throughput ─────────────────────────────────────────────────────
         if r.fps < 10:
-            issues.append(
-                f"[red]very slow ({r.fps:.1f} FPS) — unusable for online AD[/red]"
-            )
+            issues.append(f"[red]very slow ({r.fps:.1f} FPS) — unusable for online AD[/red]")
         elif r.fps < 30:
-            issues.append(
-                f"[yellow]below real-time ({r.fps:.1f} FPS) — batch/async only[/yellow]"
-            )
+            issues.append(f"[yellow]below real-time ({r.fps:.1f} FPS) — batch/async only[/yellow]")
 
-        # Tail latency jitter: p99/mean > 2x is a concern for deterministic systems
+        # ── Tail latency jitter ────────────────────────────────────────────
         if r.mean_ms > 0 and r.p99_ms / r.mean_ms > 2.5:
             issues.append(
                 f"[yellow]high tail jitter (P99/mean = {r.p99_ms / r.mean_ms:.1f}×) "
                 f"— unstable latency budget[/yellow]"
             )
 
-        if r.vram_peak_mb > 4000:
+        # ── VRAM % (device-relative — meaningful on Orin unified memory) ──
+        if r.vram_peak_pct > 85:
             issues.append(
-                f"[red]VRAM peak {r.vram_peak_mb:.0f} MB — may OOM in multi-task stack[/red]"
+                f"[red]VRAM peak {r.vram_peak_pct:.1f}% of device "
+                f"({r.vram_peak_mb:.0f} MB) — OOM risk in stack[/red]"
             )
-        elif r.vram_peak_mb > 2000:
+        elif r.vram_peak_pct > 60:
             issues.append(
-                f"[yellow]VRAM peak {r.vram_peak_mb:.0f} MB — watch stack budget[/yellow]"
+                f"[yellow]VRAM peak {r.vram_peak_pct:.1f}% "
+                f"({r.vram_peak_mb:.0f} MB) — limited headroom for other tasks[/yellow]"
+            )
+
+        if r.vram_headroom_pct < 15 and r.vram_peak_pct > 0:
+            issues.append(
+                f"[red]only {r.vram_headroom_pct:.1f}% VRAM headroom — "
+                f"stacking this task is high risk[/red]"
+            )
+
+        # ── CPU utilisation ────────────────────────────────────────────────
+        if r.cpu_util_mean_pct > 80:
+            issues.append(
+                f"[red]CPU mean {r.cpu_util_mean_pct:.1f}% — "
+                f"likely CPU-bottlenecked, not GPU[/red]"
+            )
+        elif r.cpu_util_mean_pct > 50:
+            issues.append(
+                f"[yellow]CPU mean {r.cpu_util_mean_pct:.1f}% — "
+                f"significant CPU load alongside GPU[/yellow]"
             )
 
         if not issues:
-            line = (
-                f"  [{colour}]✔ {r.task}[/{colour}]  [dim]looks good for AD stack[/dim]"
-            )
+            line = f"  [{colour}]✔ {r.task}[/{colour}]  [dim]looks good for AD stack[/dim]"
         else:
             line = f"  [{colour}]{r.task}[/{colour}]  " + "  ".join(issues)
 
