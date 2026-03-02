@@ -21,7 +21,7 @@ dependencies = [
     "huggingface-hub>=0.20.0",
     "supervision>=0.20.0",
     "rfdetr>=1.5.0",
-    "timm==0.5.4",            # backbone dep for several HF vision models
+    "timm==1.0.25",            # backbone dep for several HF vision models
 
     # Pose estimation detector
     "ultralytics>=8.0.0",     # YOLOv8n person detector in PoseEstimationTask
