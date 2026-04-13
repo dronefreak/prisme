@@ -33,7 +33,7 @@ dependencies = [
     "psutil>=5.9.0",
 
     # HybridsNet
-    "prefetch_generator>=1.0.0",
+    "prefetch_generator>=1.0.3",
     "webcolors>=25.0.0",
     "pretrainedmodels>=0.7.0",
     "efficientnet_pytorch>=0.7.1",
