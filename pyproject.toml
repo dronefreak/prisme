@@ -35,7 +35,7 @@ dependencies = [
     # HybridsNet
     "prefetch_generator>=1.0.0",
     "webcolors>=25.0.0",
-    "pretrainedmodels>=0.7.0",
+    "pretrainedmodels>=0.7.4",
     "efficientnet_pytorch>=0.7.1",
 
 ]
