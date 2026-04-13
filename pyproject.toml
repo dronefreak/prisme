@@ -24,7 +24,7 @@ dependencies = [
     "timm==0.5.4",            # backbone dep for several HF vision models
 
     # Pose estimation detector
-    "ultralytics>=8.0.0",     # YOLOv8n person detector in PoseEstimationTask
+    "ultralytics>=8.4.37",     # YOLOv8n person detector in PoseEstimationTask
 
     # Console / UI
     "rich>=13.0.0",
